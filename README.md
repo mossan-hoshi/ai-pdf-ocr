@@ -73,12 +73,19 @@ GitHub Copilotと連携してステップバイステップで開発を進める
 
 Copilotと共に、以下のステップを順番に実装・テストしていくことを推奨します。
 
-### □ Step 1: プロジェクトの基本構造と設定
+### ✅ Step 1: プロジェクトの基本構造と設定（完了）
 
-- [ ] `main.py` ファイルを作成します。
-- [ ] `input_pdfs` フォルダと `output_pdfs` フォルダを作成します。
-- [ ] `main.py` に、基本的な引数パーサー (`argparse`) を設定し、入力PDFのパスと出力先フォルダを受け取れるようにします。（例: `python main.py input_pdfs/sample.pdf -o output_pdfs`）
-- [ ] ロギング設定 (`logging`) を追加し、処理の進捗がコンソールに表示されるようにします。
+- [x] `main.py` ファイルを作成します。
+- [x] `input_pdfs` フォルダと `output_pdfs` フォルダを作成します。
+- [x] `main.py` に、基本的な引数パーサー (`argparse`) を設定し、入力PDFのパスと出力先フォルダを受け取れるようにします。（例: `python main.py input_pdfs/sample.pdf -o output_pdfs`）
+- [x] ロギング設定 (`logging`) を追加し、処理の進捗がコンソールに表示されるようにします。
+
+**実装済み機能:**
+- コマンドライン引数の解析（入力PDF、出力ディレクトリ、DPI設定、verboseオプション）
+- 入力ファイルの存在確認と拡張子検証
+- 出力ディレクトリの自動作成
+- 適切なエラーハンドリングとログ出力
+- ヘルプ表示機能
 
 ### □ Step 2: PDFをページごとに画像へ変換する機能の実装
 
@@ -142,18 +149,44 @@ Copilotと共に、以下のステップを順番に実装・テストしてい�
 
 ## 6. 使い方 (Usage)
 
+### 現在の実装状況
+Step 1が完了し、基本的なコマンドライン引数の処理、ファイル検証、ログ出力機能が利用可能です。
+
+### コマンドライン引数
+
 ```bash
 poetry run python main.py <path/to/your/input.pdf> --output_dir <path/to/output_directory>
 ```
 
-または、仮想環境をアクティベートした後：
+**利用可能なオプション:**
+- `input_pdf`: 処理する入力PDFファイルのパス（必須）
+- `-o, --output_dir`: 出力PDFファイルを保存するディレクトリ（デフォルト: output_pdfs）
+- `--dpi`: PDF画像化時のDPI設定（デフォルト: 300）
+- `-v, --verbose`: 詳細なログ出力を有効にする
+- `-h, --help`: ヘルプメッセージを表示
+
+### 使用例
+
 ```bash
-poetry shell
-python main.py <path/to/your/input.pdf> --output_dir <path/to/output_directory>
+# ヘルプ表示
+poetry run python main.py --help
+
+# 基本的な使用法
+poetry run python main.py ./input_pdfs/sample.pdf -o ./output_pdfs
+
+# 詳細ログ付きで実行
+poetry run python main.py ./input_pdfs/sample.pdf -o ./output_pdfs --verbose
+
+# DPI設定を変更して実行
+poetry run python main.py ./input_pdfs/sample.pdf -o ./output_pdfs --dpi 150
 ```
 
-例:
+### Poetry環境での実行
+
+仮想環境をアクティベートした後：
 ```bash
-poetry run python main.py ./input_pdfs/sample.pdf -o ./output_pdfs
+poetry shell
+python main.py ./input_pdfs/sample.pdf -o ./output_pdfs
 ```
-成功すると、`./output_pdfs` ディレクトリに `sample_ocr.pdf` のような名前で、テキストが埋め込まれたPDFファイルが生成されます。
+
+**注意**: 現在はStep 1のみ実装済みのため、PDFの実際の処理機能（画像変換、OCR、テキスト埋め込み）はまだ利用できません。次のステップで順次実装していきます。
