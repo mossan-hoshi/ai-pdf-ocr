@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "ai-pdf-ocr"
+version = "0.1.0"
+description = "PDF OCR & Text Overlay Tool using yomitoku AI-OCR"
+authors = ["Your Name <your.email@example.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.13"
+yomitoku = "^0.9.1"
+pymupdf = "^1.26.0"
+torch = {version = "^2.0.0", optional = true}
+torchvision = {version = "^0.15.0", optional = true}
+torchaudio = {version = "^2.0.0", optional = true}
+
+[tool.poetry.extras]
+cpu = ["torch", "torchvision", "torchaudio"]
+cuda = ["torch", "torchvision", "torchaudio"]
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
