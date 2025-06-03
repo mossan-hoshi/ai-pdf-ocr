@@ -41,17 +41,17 @@ GitHub Copilotと連携してステップバイステップで開発を進める
     ```
 
 2.  **Poetry で依存関係をインストール:**
-    
+
     **CPU版の場合:**
     ```bash
     poetry install --extras cpu
     ```
-    
+
     **CUDA版の場合:**
     ```bash
     poetry install --extras cuda
     ```
-    
+
     *PyTorch のバージョンとCUDAの対応については [PyTorch公式サイト](https://pytorch.org/get-started/locally/) をご確認ください。*
 
 3.  **仮想環境のアクティベート:**
@@ -63,7 +63,7 @@ GitHub Copilotと連携してステップバイステップで開発を進める
     ```bash
     poetry run python main.py <path/to/your/input.pdf> --output_dir <path/to/output_directory>
     ```
-    
+
     または、仮想環境をアクティベートした後：
     ```bash
     python main.py <path/to/your/input.pdf> --output_dir <path/to/output_directory>
