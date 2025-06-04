@@ -11,6 +11,8 @@ from typing import List
 
 import fitz  # PyMuPDF
 
+from data_structures import PageOCRResult
+
 
 def convert_pdf_to_images(pdf_path: Path, dpi: int = 300) -> List[fitz.Pixmap]:
     """
@@ -157,4 +159,184 @@ def save_pixmap_as_image(pixmap: fitz.Pixmap, output_path: Path, format: str = "
 
     except Exception as e:
         logger.error(f"画像保存中にエラーが発生しました: {e}")
+        raise
+
+
+def create_searchable_pdf_page(pixmap: fitz.Pixmap, ocr_result: PageOCRResult, dpi: int = 300) -> fitz.Document:
+    """
+    元の画像とOCR結果を使って、検索可能なPDFページを作成する
+
+    Args:
+        pixmap (fitz.Pixmap): 元のページ画像
+        ocr_result (PageOCRResult): OCR結果データ
+        dpi (int): DPI設定（座標変換用）
+
+    Returns:
+        fitz.Document: 1ページ分のPDFドキュメント
+
+    Raises:
+        Exception: PDF作成時のエラー
+    """
+    logger = logging.getLogger(__name__)
+
+    try:
+        # 新しい空のPDFドキュメントを作成
+        doc = fitz.open()
+
+        # OCR結果とPixmapのサイズ情報をログ出力
+        logger.info(f"ページ {ocr_result.page_number}: Pixmapサイズ {pixmap.width}x{pixmap.height} px")
+        logger.info(
+            f"ページ {ocr_result.page_number}: OCR結果サイズ {ocr_result.page_width}x{ocr_result.page_height} px"
+        )
+
+        # PDFページサイズを72DPI（PDFポイント）に変換
+        # Pixmapは指定DPIで作成されているので、PDFポイントに変換する必要がある
+        pdf_width = pixmap.width * 72.0 / dpi
+        pdf_height = pixmap.height * 72.0 / dpi
+
+        logger.info(f"ページ {ocr_result.page_number}: PDFサイズ {pdf_width:.1f}x{pdf_height:.1f} points")
+
+        # 適切なサイズでPDFページを作成
+        page = doc.new_page(width=pdf_width, height=pdf_height)
+
+        # 背景として元の画像を挿入（ページ全体にフィット）
+        page.insert_image(page.rect, pixmap=pixmap)
+
+        # OCR結果の各テキストブロックを透明テキストとして埋め込み
+        if ocr_result.text_blocks:
+            logger.debug(
+                f"ページ {ocr_result.page_number}: {len(ocr_result.text_blocks)} 個のテキストブロックを処理中..."
+            )
+
+            # OCR座標をPDF座標に変換するためのスケール計算
+            # OCR座標はPixmapと同じピクセル座標系だが、PDFはポイント座標系
+            x_scale = pdf_width / ocr_result.page_width
+            y_scale = pdf_height / ocr_result.page_height
+
+            logger.debug(f"座標変換スケール: x={x_scale:.3f}, y={y_scale:.3f}")
+
+            # OCR座標 -> PDF座標への変換
+            # OCRの座標系はページの左上が原点 (0,0)、右下が (width, height)
+            # PDFの座標系もページの左上が原点だが、ポイント単位
+
+            for i, text_block in enumerate(ocr_result.text_blocks):
+                try:
+                    # バウンディングボックスをOCR座標からPDF座標に変換
+                    bbox = text_block.bbox
+
+                    # OCR座標をPDF座標にスケール
+                    x0 = bbox.x0 * x_scale
+                    y0 = bbox.y0 * y_scale
+                    x1 = bbox.x1 * x_scale
+                    y1 = bbox.y1 * y_scale
+
+                    # デバッグ用：元の座標と変換後座標をログ出力
+                    if i < 3:  # 最初の3つだけログ出力
+                        logger.info(f"テキストブロック {i + 1}: '{text_block.text[:30]}...'")
+                        logger.info(f"  OCR座標: ({bbox.x0}, {bbox.y0}, {bbox.x1}, {bbox.y1})")
+                        logger.info(f"  PDF座標: ({x0:.1f}, {y0:.1f}, {x1:.1f}, {y1:.1f})")
+
+                    # テキストの描画設定
+                    text_height = y1 - y0
+                    font_size = min(text_height * 0.8, 12)  # フォントサイズは矩形の高さに比例
+                    if font_size < 6:
+                        font_size = 6  # 最小フォントサイズ
+
+                    # 透明テキストを挿入
+                    # insert_textは左下基準なので、y座標を調整
+                    text_y = y0 + font_size  # テキストベースライン位置
+
+                    page.insert_text(
+                        (x0, text_y),  # テキスト開始位置（左下基準）
+                        text_block.text,
+                        fontsize=font_size,
+                        fontname="helv",
+                        color=(1, 1, 1),  # 白色（見えないが検索可能）
+                        render_mode=3,  # 3 = invisible text (検索可能だが見えない)
+                    )
+
+                    logger.debug(
+                        f"テキストブロック {i + 1}/{len(ocr_result.text_blocks)}: "
+                        f"'{text_block.text[:20]}...' をPDF座標 ({x0:.1f}, {y0:.1f}, {x1:.1f}, {y1:.1f}) に挿入"
+                    )
+
+                except Exception as e:
+                    logger.warning(f"テキストブロック {i + 1} の埋め込みに失敗: {e}")
+                    continue
+
+        logger.info(f"ページ {ocr_result.page_number}: 検索可能なPDFページの作成が完了")
+        return doc
+
+    except Exception as e:
+        logger.error(f"検索可能なPDFページ作成中にエラーが発生しました: {e}")
+        raise
+
+
+def create_searchable_pdf(
+    pixmaps: List[fitz.Pixmap], ocr_results: List[PageOCRResult], output_path: Path, dpi: int = 300
+) -> None:
+    """
+    全ページの画像とOCR結果を使って、検索可能なPDFファイルを作成する
+
+    Args:
+        pixmaps (List[fitz.Pixmap]): 各ページの画像データ
+        ocr_results (List[PageOCRResult]): 各ページのOCR結果
+        output_path (Path): 出力PDFファイルのパス
+        dpi (int): DPI設定（座標変換用）
+
+    Raises:
+        ValueError: ページ数が一致しない場合
+        Exception: PDF作成時のエラー
+    """
+    logger = logging.getLogger(__name__)
+
+    # ページ数の一致確認
+    if len(pixmaps) != len(ocr_results):
+        raise ValueError(f"画像ページ数 ({len(pixmaps)}) とOCR結果ページ数 ({len(ocr_results)}) が一致しません")
+
+    logger.info(f"検索可能なPDF作成を開始: {len(pixmaps)} ページ")
+
+    try:
+        # 最終的な出力用PDFドキュメントを作成
+        final_doc = fitz.open()
+
+        for page_num, (pixmap, ocr_result) in enumerate(zip(pixmaps, ocr_results)):
+            logger.info(f"ページ {page_num + 1}/{len(pixmaps)} を処理中...")
+
+            # OCR処理が失敗したページの場合は画像のみで処理
+            if not ocr_result.success:
+                logger.warning(f"ページ {page_num + 1}: OCR結果がないため、画像のみで処理します")
+                # 空のOCR結果を作成
+                ocr_result = PageOCRResult(
+                    page_number=page_num + 1,
+                    text_blocks=[],
+                    page_width=pixmap.width,
+                    page_height=pixmap.height,
+                    success=False,
+                    error="OCR処理失敗",
+                )
+
+            # 1ページ分の検索可能なPDFを作成
+            page_doc = create_searchable_pdf_page(pixmap, ocr_result, dpi)
+
+            # 最終ドキュメントにページを追加
+            final_doc.insert_pdf(page_doc)
+
+            # 一時的なドキュメントを閉じる
+            page_doc.close()
+
+        # 出力ディレクトリを作成（存在しない場合）
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # PDFファイルを保存
+        final_doc.save(
+            str(output_path), garbage=4, deflate=True, clean=True  # ガベージコレクション  # 圧縮  # クリーンアップ
+        )
+
+        final_doc.close()
+
+        logger.info(f"検索可能なPDFファイルの作成が完了: {output_path}")
+
+    except Exception as e:
+        logger.error(f"検索可能なPDF作成中にエラーが発生しました: {e}")
         raise

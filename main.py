@@ -12,7 +12,7 @@ from pathlib import Path
 
 from data_structures import DocumentOCRResult, save_ocr_results
 from ocr_processor import OCRProcessor, parse_ocr_results
-from pdf_processor import convert_pdf_to_images, get_pdf_info
+from pdf_processor import convert_pdf_to_images, create_searchable_pdf, get_pdf_info
 
 
 def setup_logging(verbose: bool = False) -> None:
@@ -63,6 +63,12 @@ def parse_arguments() -> argparse.Namespace:
         "--test-ocr",
         action="store_true",
         help="最初のページのみでOCR機能をテストする",
+    )
+
+    parser.add_argument(
+        "--ocr-only",
+        action="store_true",
+        help="OCR処理のみ実行し、検索可能なPDFは作成しない",
     )
 
     return parser.parse_args()
@@ -274,8 +280,23 @@ def main() -> None:
             logger.info(f"  - 文書文字数: {len(document_result.document_text)}")
 
         # TODO: Step 5以降の処理を実装（テキスト埋め込み機能）
-        if not args.test_ocr:
-            logger.info("TODO: テキスト埋め込み機能の実装が必要です")
+        if not args.test_ocr and not args.ocr_only:
+            logger.info("Step 5: 検索可能なPDFファイルを作成中...")
+
+            try:
+                # 検索可能なPDFを作成
+                create_searchable_pdf(pixmaps, document_result.pages, output_path, args.dpi)
+                logger.info(f"検索可能なPDFファイルが作成されました: {output_path}")
+
+                # ファイルサイズを確認
+                file_size = output_path.stat().st_size / (1024 * 1024)  # MB
+                logger.info(f"出力ファイルサイズ: {file_size:.2f} MB")
+
+            except Exception as e:
+                logger.error(f"検索可能なPDF作成中にエラーが発生しました: {e}")
+                raise
+        elif args.ocr_only:
+            logger.info("OCRのみモード: 検索可能なPDF作成をスキップしました")
 
         logger.info("処理が完了しました")
 
