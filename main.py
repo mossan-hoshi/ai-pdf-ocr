@@ -10,6 +10,8 @@ import logging
 import sys
 from pathlib import Path
 
+from pdf_processor import convert_pdf_to_images, get_pdf_info
+
 
 def setup_logging(verbose: bool = False) -> None:
     """ロギング設定を初期化する"""
@@ -111,8 +113,24 @@ def main() -> None:
         output_path = generate_output_filename(input_path, output_dir)
         logger.info(f"出力ファイル: {output_path}")
 
-        # TODO: Step 2以降の処理を実装
-        logger.info("TODO: PDF処理とOCR機能の実装が必要です")
+        # Step 2: PDFファイルの情報を取得
+        logger.info("PDFファイルの情報を取得中...")
+        pdf_info = get_pdf_info(input_path)
+        logger.info(f"PDFページ数: {pdf_info['page_count']}")
+        logger.info(f"暗号化: {'はい' if pdf_info['is_encrypted'] else 'いいえ'}")
+
+        # Step 2: PDFを画像に変換
+        logger.info("PDFをページごとに画像に変換中...")
+        pixmaps = convert_pdf_to_images(input_path, args.dpi)
+
+        logger.info(f"画像変換が完了しました。変換されたページ数: {len(pixmaps)}")
+
+        # 画像情報をログ出力
+        for i, pixmap in enumerate(pixmaps):
+            logger.debug(f"ページ {i + 1}: {pixmap.width}x{pixmap.height} pixels")
+
+        # TODO: Step 3以降の処理を実装（OCR処理とテキスト埋め込み）
+        logger.info("TODO: OCR処理とテキスト埋め込み機能の実装が必要です")
 
         logger.info("処理が完了しました")
 
