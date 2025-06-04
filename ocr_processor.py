@@ -149,9 +149,34 @@ class OCRProcessor:
             logger.error(error_msg)
             return {"success": False, "results": None, "ocr_vis": None, "layout_vis": None, "error": error_msg}
 
+    def __del__(self):
+        """デストラクタでリソースを明示的に解放"""
+        try:
+            if hasattr(self, "analyzer") and self.analyzer is not None:
+                del self.analyzer
+                self.analyzer = None
+            import gc
+
+            gc.collect()
+        except Exception:
+            pass  # エラーログは出さない
+
+    def clear_memory(self):
+        """メモリを明示的に解放する"""
+        try:
+            if hasattr(self, "analyzer") and self.analyzer is not None:
+                del self.analyzer
+                self.analyzer = None
+            import gc
+
+            gc.collect()
+            logger.info("OCRProcessorのメモリを解放しました")
+        except Exception as e:
+            logger.warning(f"メモリ解放中にエラーが発生しました: {e}")
+
     def perform_ocr(self, pixmap: fitz.Pixmap) -> Dict[str, Any]:
         """
-        OCR処理を実行
+        OCR処理を実行（メモリ最適化版）
 
         Args:
             pixmap (fitz.Pixmap): PyMuPDFのPixmapオブジェクト
@@ -164,6 +189,7 @@ class OCRProcessor:
                 - 'layout_vis': レイアウト可視化画像 (visualize=Trueの場合)
                 - 'error': エラーメッセージ (失敗時)
         """
+        img_array = None
         try:
             # DocumentAnalyzerの初期化（遅延初期化）
             self._initialize_analyzer()
@@ -177,7 +203,7 @@ class OCRProcessor:
             if self.visualize:
                 results, ocr_vis, layout_vis = self.analyzer(img_array)
 
-                return {
+                result = {
                     "success": True,
                     "results": results,
                     "ocr_vis": ocr_vis,
@@ -187,11 +213,24 @@ class OCRProcessor:
             else:
                 results, _, _ = self.analyzer(img_array)
 
-                return {"success": True, "results": results, "ocr_vis": None, "layout_vis": None, "error": None}
+                result = {"success": True, "results": results, "ocr_vis": None, "layout_vis": None, "error": None}
+
+            # メモリを明示的に解放
+            del img_array
+            import gc
+
+            gc.collect()
+
+            return result
 
         except Exception as e:
             error_msg = f"OCR処理中にエラーが発生しました: {e}"
             logger.error(error_msg)
+
+            import gc
+
+            gc.collect()
+
             return {"success": False, "results": None, "ocr_vis": None, "layout_vis": None, "error": error_msg}
 
     def perform_ocr_structured(self, pixmap: fitz.Pixmap, page_number: int) -> PageOCRResult:

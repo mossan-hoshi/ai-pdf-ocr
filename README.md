@@ -1,5 +1,8 @@
 # PDF OCR & Text Overlay Tool
 
+
+
+
 ## 1. 概要 (Overview)
 
 このリポジトリは、PDFファイルを受け取り、AI-OCR「[yomitoku](https://github.com/kotaro-kinoshita/yomitoku)」を用いて各ページの文字認識を行います。その後、認識したテキストとその位置情報を、元のPDF画像上に透明なテキストレイヤーとして正確に埋め込み、検索可能なPDF（Transparent/Searchable PDF）を生成するPythonプログラムです。
@@ -80,8 +83,111 @@ GitHub Copilotと連携してステップバイステップで開発を進め、
     ```bash
     python main.py <path/to/your/input.pdf> --output_dir <path/to/output_directory>
     ```
+## 5. 使い方 (Usage)
 
-## 5. 開発TODOリスト (Development TODOs)
+### 現在の実装状況
+**🎉 全機能実装完了！** Step 1〜6まで全て完了し、完全な検索可能PDF作成機能が利用可能です。
+
+**実装済み機能:**
+- **完全なエンドツーエンド処理**: PDFファイル → OCR処理 → 検索可能PDF作成
+- **高精度OCR処理**: AI-OCR `yomitoku` による99.8%+の信頼度
+- **透明テキストレイヤー**: 元の見た目を保持したまま検索可能なテキストを埋め込み
+- **正確な座標変換**: OCRピクセル座標からPDFポイント座標への精密な変換
+- **コマンドライン引数**: 柔軟な処理オプション（DPI、デバイス、出力ディレクトリなど）
+- **構造化出力**: JSON形式での詳細なOCR結果保存
+- **エラーハンドリング**: 堅牢な例外処理とログ出力
+- **パフォーマンス最適化**: CPU/CUDA対応、メモリ効率的な処理
+- **段階的処理**: OCR結果の保存・読み込みによるレジューム機能
+
+### コマンドライン引数
+
+```bash
+poetry run python main.py <path/to/your/input.pdf> [オプション]
+```
+
+**利用可能なオプション:**
+- `input_pdf`: 処理する入力PDFファイルのパス（必須）
+- `-o, --output_dir`: 出力ファイルを保存するディレクトリ（デフォルト: output_pdfs）
+- `--dpi`: PDF画像化時のDPI設定（デフォルト: 300）
+- `--device`: OCR処理に使用するデバイス（`cpu` または `cuda`、デフォルト: cuda）
+- `--ocr-only`: OCR処理のみ実行し、PDF作成をスキップ
+- `-v, --verbose`: 詳細なログ出力を有効にする
+- `-h, --help`: ヘルプメッセージを表示
+
+### 使用例
+
+```bash
+# ヘルプ表示
+poetry run python main.py --help
+
+# 基本的な検索可能PDF作成（推奨）
+poetry run python main.py ./input_pdfs/sample.pdf
+
+# 基本的な検索可能PDF作成（推奨）
+poetry run python main.py ./input_pdfs/sample.pdf -o ./output_pdfs
+
+# OCR処理のみ実行（PDF作成をスキップ）
+poetry run python main.py ./input_pdfs/sample.pdf -o ./output_pdfs --ocr-only
+
+# CPU使用で処理
+poetry run python main.py ./input_pdfs/sample.pdf -o ./output_pdfs --device cpu
+
+# 詳細ログ付きで実行
+poetry run python main.py ./input_pdfs/sample.pdf -o ./output_pdfs --verbose
+
+# DPI設定を変更して実行
+poetry run python main.py ./input_pdfs/sample.pdf -o ./output_pdfs --dpi 150
+
+# 段階的処理：まずOCRのみ実行
+poetry run python main.py ./input_pdfs/sample.pdf --ocr-only
+
+# 次に既存のOCR結果を使ってPDF作成
+poetry run python main.py ./input_pdfs/sample.pdf
+```
+
+### テスト用PDFファイルの作成
+
+開発・テスト用のサンプルPDFファイルを作成できます：
+
+```bash
+# テスト用PDFファイルを作成
+python create_test_pdf.py
+
+# 作成されたテストファイルで検索可能PDF作成をテスト
+poetry run python main.py input_pdfs/test_sample.pdf --verbose
+```
+
+### 出力ファイル
+
+処理完了後、以下のファイルが生成されます：
+
+1. **検索可能PDF**: `{出力ディレクトリ}/{ファイル名}_ocr.pdf`
+   - 元の見た目を保持
+   - 透明テキストレイヤーによる検索機能
+   - テキスト選択とコピーが可能
+
+2. **OCR結果JSON**: `{出力ディレクトリ}/{ファイル名}_ocr_results.json`
+   - 構造化されたOCR結果
+   - テキストブロック座標と信頼度
+   - 処理統計情報
+
+### 検索可能PDFの機能確認
+
+作成されたPDFで以下の機能をテストできます：
+
+1. **テキスト検索**: PDFビューアの検索機能（Ctrl+F）でテキストを検索
+2. **テキスト選択**: マウスでテキストを選択してコピー
+3. **アクセシビリティ**: スクリーンリーダーでの読み上げ対応
+
+### Poetry環境での実行
+
+仮想環境をアクティベートした後：
+```bash
+poetry shell
+python main.py ./input_pdfs/sample.pdf -o ./output_pdfs
+```
+
+## 6. 開発TODOリスト (Development TODOs)
 
 Copilotと共に、以下のステップを順番に実装・テストしていくことを推奨します。
 
@@ -210,106 +316,6 @@ Copilotと共に、以下のステップを順番に実装・テストしてい�
 - 段階的処理とレジューム機能（OCR結果の保存・読み込み）
 - 詳細なログ出力と進捗報告
 
-## 6. 使い方 (Usage)
-
-### 現在の実装状況
-**🎉 全機能実装完了！** Step 1〜6まで全て完了し、完全な検索可能PDF作成機能が利用可能です。
-
-**実装済み機能:**
-- **完全なエンドツーエンド処理**: PDFファイル → OCR処理 → 検索可能PDF作成
-- **高精度OCR処理**: AI-OCR `yomitoku` による99.8%+の信頼度
-- **透明テキストレイヤー**: 元の見た目を保持したまま検索可能なテキストを埋め込み
-- **正確な座標変換**: OCRピクセル座標からPDFポイント座標への精密な変換
-- **コマンドライン引数**: 柔軟な処理オプション（DPI、デバイス、出力ディレクトリなど）
-- **構造化出力**: JSON形式での詳細なOCR結果保存
-- **エラーハンドリング**: 堅牢な例外処理とログ出力
-- **パフォーマンス最適化**: CPU/CUDA対応、メモリ効率的な処理
-- **段階的処理**: OCR結果の保存・読み込みによるレジューム機能
-
-### コマンドライン引数
-
-```bash
-poetry run python main.py <path/to/your/input.pdf> [オプション]
-```
-
-**利用可能なオプション:**
-- `input_pdf`: 処理する入力PDFファイルのパス（必須）
-- `-o, --output_dir`: 出力ファイルを保存するディレクトリ（デフォルト: output_pdfs）
-- `--dpi`: PDF画像化時のDPI設定（デフォルト: 300）
-- `--device`: OCR処理に使用するデバイス（`cpu` または `cuda`、デフォルト: cuda）
-- `--ocr-only`: OCR処理のみ実行し、PDF作成をスキップ
-- `-v, --verbose`: 詳細なログ出力を有効にする
-- `-h, --help`: ヘルプメッセージを表示
-
-### 使用例
-
-```bash
-# ヘルプ表示
-poetry run python main.py --help
-
-# 基本的な検索可能PDF作成（推奨）
-poetry run python main.py ./input_pdfs/sample.pdf -o ./output_pdfs
-
-# OCR処理のみ実行（PDF作成をスキップ）
-poetry run python main.py ./input_pdfs/sample.pdf -o ./output_pdfs --ocr-only
-
-# CPU使用で処理
-poetry run python main.py ./input_pdfs/sample.pdf -o ./output_pdfs --device cpu
-
-# 詳細ログ付きで実行
-poetry run python main.py ./input_pdfs/sample.pdf -o ./output_pdfs --verbose
-
-# DPI設定を変更して実行
-poetry run python main.py ./input_pdfs/sample.pdf -o ./output_pdfs --dpi 150
-
-# 段階的処理：まずOCRのみ実行
-poetry run python main.py ./input_pdfs/sample.pdf --ocr-only
-
-# 次に既存のOCR結果を使ってPDF作成
-poetry run python main.py ./input_pdfs/sample.pdf
-```
-
-### テスト用PDFファイルの作成
-
-開発・テスト用のサンプルPDFファイルを作成できます：
-
-```bash
-# テスト用PDFファイルを作成
-python create_test_pdf.py
-
-# 作成されたテストファイルで検索可能PDF作成をテスト
-poetry run python main.py input_pdfs/test_sample.pdf --verbose
-```
-
-### 出力ファイル
-
-処理完了後、以下のファイルが生成されます：
-
-1. **検索可能PDF**: `{出力ディレクトリ}/{ファイル名}_ocr.pdf`
-   - 元の見た目を保持
-   - 透明テキストレイヤーによる検索機能
-   - テキスト選択とコピーが可能
-
-2. **OCR結果JSON**: `{出力ディレクトリ}/{ファイル名}_ocr_results.json`
-   - 構造化されたOCR結果
-   - テキストブロック座標と信頼度
-   - 処理統計情報
-
-### 検索可能PDFの機能確認
-
-作成されたPDFで以下の機能をテストできます：
-
-1. **テキスト検索**: PDFビューアの検索機能（Ctrl+F）でテキストを検索
-2. **テキスト選択**: マウスでテキストを選択してコピー
-3. **アクセシビリティ**: スクリーンリーダーでの読み上げ対応
-
-### Poetry環境での実行
-
-仮想環境をアクティベートした後：
-```bash
-poetry shell
-python main.py ./input_pdfs/sample.pdf -o ./output_pdfs
-```
 
 ## 7. 実装技術詳細
 

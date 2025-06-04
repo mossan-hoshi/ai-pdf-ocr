@@ -340,3 +340,143 @@ def create_searchable_pdf(
     except Exception as e:
         logger.error(f"検索可能なPDF作成中にエラーが発生しました: {e}")
         raise
+
+
+def convert_single_page_to_image(pdf_path: Path, page_num: int, dpi: int = 300) -> fitz.Pixmap:
+    """
+    PDFファイルの単一ページを画像（Pixmap）に変換する（メモリ効率化）
+
+    Args:
+        pdf_path (Path): 変換するPDFファイルのパス
+        page_num (int): ページ番号（0から開始）
+        dpi (int): 画像変換時のDPI（デフォルト: 300）
+
+    Returns:
+        fitz.Pixmap: 指定ページのPixmapオブジェクト
+
+    Raises:
+        FileNotFoundError: PDFファイルが見つからない場合
+        Exception: PDF読み込みまたは変換時のエラー
+    """
+    logger = logging.getLogger(__name__)
+
+    # ファイル存在確認
+    if not pdf_path.exists():
+        raise FileNotFoundError(f"PDFファイルが見つかりません: {pdf_path}")
+
+    try:
+        # PDFファイルを開く
+        pdf_document = fitz.open(pdf_path)
+
+        if page_num >= pdf_document.page_count:
+            raise ValueError(f"ページ番号が範囲外です: {page_num} (総ページ数: {pdf_document.page_count})")
+
+        # 指定ページをロード
+        page = pdf_document.load_page(page_num)
+
+        # DPIに基づいてスケール行列を作成
+        scale = dpi / 72.0
+        matrix = fitz.Matrix(scale, scale)
+
+        # ページをPixmapに変換
+        pixmap = page.get_pixmap(matrix=matrix)
+
+        # PDFドキュメントを閉じる
+        pdf_document.close()
+
+        logger.debug(f"ページ {page_num + 1}: サイズ {pixmap.width}x{pixmap.height} px")
+        return pixmap
+
+    except Exception as e:
+        logger.error(f"PDF単一ページ変換中にエラーが発生しました: {e}")
+        # ドキュメントが開かれている場合は閉じる
+        try:
+            if "pdf_document" in locals():
+                pdf_document.close()
+        except Exception:
+            pass
+        raise
+
+
+def create_memory_efficient_searchable_pdf(
+    input_path: Path, pages_results: List[PageOCRResult], output_path: Path, dpi: int
+) -> None:
+    """
+    メモリ効率的な検索可能PDFを作成
+
+    Args:
+        input_path (Path): 元のPDFファイルのパス
+        pages_results (List[PageOCRResult]): ページごとのOCR結果
+        output_path (Path): 出力PDFファイルのパス
+        dpi (int): DPI設定
+    """
+    logger = logging.getLogger(__name__)
+
+    try:
+        logger.info("メモリ効率的な検索可能PDF作成を開始...")
+
+        # 新しいPDFドキュメントを作成
+        output_doc = fitz.open()
+
+        total_pages = len(pages_results)
+
+        for i, page_result in enumerate(pages_results):
+            logger.info(f"ページ {i + 1}/{total_pages} を処理中...")
+
+            try:
+                # 1ページずつ画像に変換
+                pixmap = convert_single_page_to_image(input_path, i, dpi)
+
+                # 新しいページを作成
+                page_rect = fitz.Rect(0, 0, pixmap.width * 72 / dpi, pixmap.height * 72 / dpi)
+                page = output_doc.new_page(width=page_rect.width, height=page_rect.height)
+
+                # 元の画像を背景として挿入
+                page.insert_image(page_rect, pixmap=pixmap)
+
+                # OCRテキストを透明レイヤーとして埋め込み
+                if page_result.success and page_result.text_blocks:
+                    for text_block in page_result.text_blocks:
+                        try:
+                            # 座標変換
+                            x_scale = page_rect.width / page_result.page_width
+                            y_scale = page_rect.height / page_result.page_height
+
+                            x1 = text_block.bbox.x0 * x_scale
+                            y1 = text_block.bbox.y0 * y_scale
+                            y2 = text_block.bbox.y1 * y_scale
+
+                            # フォントサイズ計算
+                            text_height = y2 - y1
+                            font_size = max(1, text_height * 0.8)
+
+                            # 透明テキストを挿入
+                            page.insert_text(
+                                point=(x1, y1 + text_height * 0.8),
+                                text=text_block.text,
+                                fontsize=font_size,
+                                render_mode=3,  # 透明テキスト
+                                color=(0, 0, 0),
+                            )
+                        except Exception as e:
+                            logger.warning(f"テキストブロック埋め込みエラー (ページ {i + 1}): {e}")
+
+                # メモリを明示的に解放
+                del pixmap
+
+            except Exception as e:
+                logger.error(f"ページ {i + 1} の処理中にエラーが発生しました: {e}")
+                # エラーページの場合は空のページを追加
+                page_rect = fitz.Rect(0, 0, 595, 842)  # A4サイズデフォルト
+                page = output_doc.new_page(width=page_rect.width, height=page_rect.height)
+
+        # PDFを保存
+        logger.info("PDFファイルを保存中...")
+        output_doc.save(output_path, garbage=4, deflate=True, clean=True)
+        output_doc.close()
+
+        logger.info("メモリ効率的な検索可能PDF作成が完了しました")
+
+    except Exception as e:
+        logger.error(f"メモリ効率的PDF作成中にエラーが発生しました: {e}")
+        raise
