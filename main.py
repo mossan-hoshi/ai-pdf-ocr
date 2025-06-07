@@ -18,6 +18,7 @@ from data_structures import BoundingBox, DocumentOCRResult, PageOCRResult, TextB
 from ocr_processor import OCRProcessor, parse_ocr_results
 from pdf_processor import convert_single_page_to_image, create_memory_efficient_searchable_pdf, get_pdf_info
 from simple_memory_monitor import SimpleMemoryMonitor, check_memory_availability, get_optimal_batch_size
+from text_block_sorter import sort_document_text_blocks
 
 
 def setup_logging(verbose: bool = False) -> None:
@@ -74,6 +75,13 @@ def parse_arguments() -> argparse.Namespace:
         "--ocr-only",
         action="store_true",
         help="OCR処理のみ実行し、検索可能なPDFは作成しない",
+    )
+
+    parser.add_argument(
+        "--overlap-threshold",
+        type=float,
+        default=0.6,
+        help="重複テキストブロック削除の閾値（0.0-1.0、デフォルト: 0.6 = 60%）",
     )
 
     return parser.parse_args()
@@ -150,7 +158,9 @@ def test_ocr_processing(pixmap, device: str, logger) -> None:
         logger.error(f"OCRテスト中にエラーが発生しました: {e}")
 
 
-def perform_memory_efficient_ocr(input_path: Path, device: str, dpi: int, logger) -> DocumentOCRResult:
+def perform_memory_efficient_ocr(
+    input_path: Path, device: str, dpi: int, logger, overlap_threshold: float = 0.6
+) -> DocumentOCRResult:
     """メモリ効率的なOCR処理を実行"""
     memory_monitor = SimpleMemoryMonitor(logger)
     memory_monitor.log_memory_usage("OCR処理開始")
@@ -283,6 +293,19 @@ def perform_memory_efficient_ocr(input_path: Path, device: str, dpi: int, logger
             dpi=dpi,
         )
 
+        # 文書全体のテキストブロックを読み順にソート
+        sort_document_text_blocks(document_result)
+
+        # 重複テキストブロックを削除
+        removed_counts = document_result.remove_duplicate_blocks(overlap_threshold)
+        if removed_counts:
+            total_removed = sum(removed_counts.values())
+            logger.info(f"重複テキストブロックを削除しました: 総計{total_removed}個")
+            for page_num, count in removed_counts.items():
+                logger.info(f"  - ページ{page_num}: {count}個削除")
+        else:
+            logger.info("重複テキストブロックは検出されませんでした")
+
         logger.info(f"OCR処理完了 - 成功: {document_result.successful_pages}/{document_result.total_pages}ページ")
         logger.info(f"総処理時間: {total_processing_time:.2f}秒")
 
@@ -350,6 +373,25 @@ def main() -> None:
             try:
                 document_result = load_ocr_results(ocr_output_path)
                 logger.info(f"OCR結果を読み込みました: {document_result.total_pages}ページ")
+
+                # 既存OCR結果のテキストブロックも読み順にソート
+                sort_document_text_blocks(document_result)
+                logger.info("既存OCR結果のテキストブロックを読み順にソート完了")
+
+                # 重複テキストブロックを削除
+                removed_counts = document_result.remove_duplicate_blocks(args.overlap_threshold)
+                if removed_counts:
+                    total_removed = sum(removed_counts.values())
+                    logger.info(f"既存OCR結果から重複テキストブロックを削除しました: 総計{total_removed}個")
+                    for page_num, count in removed_counts.items():
+                        logger.info(f"  - ページ{page_num}: {count}個削除")
+
+                    # 重複削除後の結果を再保存
+                    save_ocr_results(document_result, ocr_output_path)
+                    logger.info(f"重複削除後のOCR結果を保存しました: {ocr_output_path}")
+                else:
+                    logger.info("既存OCR結果に重複テキストブロックは検出されませんでした")
+
                 memory_monitor.log_memory_usage("OCR結果読み込み完了")
             except Exception as e:
                 logger.warning(f"OCR結果の読み込みに失敗しました: {e}")
@@ -368,7 +410,9 @@ def main() -> None:
             logger.info("全ページの構造化OCR処理を開始...")
 
             # メモリ効率的な構造化OCR処理を実行
-            document_result = perform_memory_efficient_ocr(input_path, args.device, args.dpi, logger)
+            document_result = perform_memory_efficient_ocr(
+                input_path, args.device, args.dpi, logger, args.overlap_threshold
+            )
 
             # OCR結果をJSONファイルに保存
             save_ocr_results(document_result, ocr_output_path)
